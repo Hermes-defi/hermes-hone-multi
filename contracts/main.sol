@@ -1684,8 +1684,19 @@ ERC20("Hermes Multi Staked ONE", "hmONE")
     uint256 public totalRewardCollected;
     uint256 public totalFeeCollected;
     uint256 public minDelegate = 100 ether;
-    uint256 public withdrawTimestamp = 127 hours;
+    uint256 public withdrawTimestamp = 150 hours;
     uint256 public withdrawEpochs = 7;
+
+    uint256 public rewardStatsLastDeposit; // timestamp
+    uint256 public rewardStatsLastReward; // uint256 1283838834
+    uint256 public rewardStatsTimeInterval; // uint 19222
+    uint256 public rewardStatsBalance; // balance at this moment
+
+    // we discard nodes already elected from withdraw
+    uint256 public safeElectionThreshold = 100000 ether;
+
+    // user can't withdraw more than this, to prevent breaking validators
+    uint256 public safeWithdrawThreshold = 10000 ether;
 
     // the validator address where ONE should be staked
     // address public defaultValidator = address(0xee0e4Cdc193367dd9482Ed4152444e1d8971a6B7); // hermes
@@ -1726,6 +1737,12 @@ ERC20("Hermes Multi Staked ONE", "hmONE")
 
     event validatorAdded(address validator);
 
+    function setSafeElectionThreshold(uint value) public onlyOwner {
+        safeElectionThreshold = value;
+    }
+    function setSafeWithdrawThreshold(uint value) public onlyOwner {
+        safeWithdrawThreshold = value;
+    }
     function add(address validator) public onlyOwner {
         _add(validator);
     }
@@ -1791,11 +1808,14 @@ ERC20("Hermes Multi Staked ONE", "hmONE")
             if (validatorsByAddress[validator].isEnabled == false)
                 continue;
 
-            // validator deposit is high than current
+            if (validatorsByAddress[current].deposits <= safeElectionThreshold)
+                continue;
+
+            // validator is high than current
             if (validatorsByAddress[current].deposits <= lowestBalance)
                 continue;
 
-            // this validator has lowest possible balance
+            // this validator has highest possible balance
             lowestBalance = validatorsByAddress[current].deposits;
             validator = current;
         }
@@ -1837,11 +1857,6 @@ ERC20("Hermes Multi Staked ONE", "hmONE")
         emit withdrawEpochsChanged(withdrawEpochs, _value);
         withdrawEpochs = _value;
     }
-
-    uint256 public rewardStatsLastDeposit; // timestamp
-    uint256 public rewardStatsLastReward; // uint256 1283838834
-    uint256 public rewardStatsTimeInterval; // uint 19222
-    uint256 public rewardStatsBalance; // balance at this moment
 
     function collectRewards() internal returns (uint256) {
         uint256 balanceBefore = address(this).balance;
@@ -1976,6 +1991,7 @@ ERC20("Hermes Multi Staked ONE", "hmONE")
         uint256 ONE = (balance * _share) / supply;
         balance -= ONE;
         _burn(msg.sender, _share);
+        require(ONE <= safeWithdrawThreshold, "withdraw too big");
 
         // unlock the ONE in the contract
         uint256 status = _undelegate(validator, ONE);

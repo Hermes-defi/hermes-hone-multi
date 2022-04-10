@@ -48,7 +48,7 @@ describe("main", function () {
     describe("Check for epoch", () => {
         it("Should spit out epoch", async () => {
             const epoch = await main.epoch();
-            // console.log("epoch:", epoch);
+            console.log("epoch:", epoch);
         });
     });
 
